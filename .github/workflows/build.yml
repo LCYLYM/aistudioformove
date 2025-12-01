@@ -28,11 +28,11 @@ jobs:
           npm run build:web
 
       - name: Build electron exe (unsigned)
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-          WIN_CSC_LINK: ""
-          CSC_LINK: ""
         run: |
+          # 禁用自动签名并清理可能残留的签名相关环境变量
+          Remove-Item Env:WIN_CSC_LINK -ErrorAction SilentlyContinue
+          Remove-Item Env:CSC_LINK -ErrorAction SilentlyContinue
+          $env:CSC_IDENTITY_AUTO_DISCOVERY = "false"
           npm run build:electron
 
       - name: Upload exe
