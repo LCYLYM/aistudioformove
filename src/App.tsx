@@ -3,23 +3,64 @@ import { loadZipAndCompile } from './runtime/zipRunner';
 import { getStoredGeminiConfig, setStoredGeminiConfig } from './runtime/geminiConfig';
 import { deleteZipFromHistory, listZipHistory, loadZipBlob, saveZipToHistory, type ZipMeta } from './runtime/zipHistory';
 
+// 打包模式：当 VITE_PACKAGE_MODE=embedded 时，Host 只展示全屏预览，并自动加载内置的 embedded-app.zip
+const PACKAGE_MODE = import.meta.env.VITE_PACKAGE_MODE === 'embedded';
+const EMBED_ZIP_URL = import.meta.env.VITE_EMBED_ZIP_URL || 'embedded-app.zip';
+
 interface CassetteBoxProps {
   title: string;
   headerRight?: ReactNode;
   className?: string;
   children: ReactNode;
+  collapsible?: boolean;
+  collapsed?: boolean;
+  onHeaderClick?: () => void;
 }
 
-const CassetteBox: React.FC<CassetteBoxProps> = ({ title, headerRight, className = '', children }) => (
-  <div className={`flex flex-col border border-[#ffb000] bg-[#1a1a1a] shadow-[0_0_10px_rgba(255,176,0,0.1)] ${className}`}>
-    <div className="flex justify-between items-center bg-[#ffb000] text-black px-2 py-1 uppercase text-xs font-bold tracking-wider flex-shrink-0">
-      <span>{title}</span>
+const CassetteBox: React.FC<CassetteBoxProps> = ({
+  title,
+  headerRight,
+  className = '',
+  children,
+  collapsible = false,
+  collapsed = false,
+  onHeaderClick,
+}) => (
+  <div
+    className={`flex flex-col border border-[#ffb000] bg-[#1a1a1a] shadow-[0_0_10px_rgba(255,176,0,0.1)] ${className} ${
+      collapsible && collapsed ? '!flex-none' : ''
+    }`}
+  >
+    <div
+      className={`flex justify-between items-center bg-[#ffb000] text-black px-2 py-1 uppercase text-xs font-bold tracking-wider flex-shrink-0 ${
+        collapsible ? 'cursor-pointer select-none' : ''
+      }`}
+      onClick={collapsible ? onHeaderClick : undefined}
+    >
+      <span className="flex items-center gap-1">
+        {collapsible && (
+          <span
+            className={`inline-block w-2 h-2 border-l border-b border-black transform transition-transform ${
+              collapsed ? '-rotate-45 -translate-y-[1px]' : 'rotate-45 translate-y-[1px]'
+            }`}
+          />
+        )}
+        <span>{title}</span>
+      </span>
       {headerRight && <span className="text-[10px]">{headerRight}</span>}
     </div>
-    <div className="flex-1 p-3 overflow-hidden relative min-h-0 flex flex-col">
-      {children}
-      <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-[#ffb000] mb-1 mr-1 opacity-50 pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-[#ffb000] mb-1 ml-1 opacity-50 pointer-events-none" />
+    <div
+      className={`flex-1 relative min-h-0 flex flex-col overflow-hidden transition-[max-height,opacity] duration-150 ${
+        collapsible && collapsed ? 'max-h-0 opacity-0 p-0' : 'max-h-[999px] opacity-100 p-3'
+      }`}
+    >
+      {!collapsible || !collapsed ? (
+        <>
+          {children}
+          <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-[#ffb000] mb-1 mr-1 opacity-50 pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-[#ffb000] mb-1 ml-1 opacity-50 pointer-events-none" />
+        </>
+      ) : null}
     </div>
   </div>
 );
@@ -31,6 +72,8 @@ export const App: React.FC = () => {
   const [config, setConfig] = useState(getStoredGeminiConfig());
   const [selectedZipName, setSelectedZipName] = useState<string | null>(null);
   const [history, setHistory] = useState<ZipMeta[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
@@ -120,6 +163,35 @@ export const App: React.FC = () => {
       el.mozRequestFullScreen ||
       el.msRequestFullscreen;
     if (requestFull) requestFull.call(el);
+  };
+
+  const handleCreateBuildIssue = async () => {
+    if (!selectedZipName) {
+      alert('请先在左侧选择并运行一个 ZIP 文件');
+      return;
+    }
+
+    const title = `Build: ${selectedZipName}`;
+    const bodyLines = [
+      '# 打包请求',
+      '',
+      `- 源 ZIP：\`${selectedZipName}\``,
+      '',
+      '请在此 Issue 中上传对应的 .zip 附件（直接拖拽或使用 “Attach files” 按钮）。',
+      '工作流会自动下载附件，构建专用 exe / apk。',
+    ];
+    const body = bodyLines.join('\n');
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(body);
+      }
+    } catch {
+      // 剪贴板失败不影响后续打开页面
+    }
+
+    const url = `https://github.com/LCYLYM/purepackage/issues/new?title=${encodeURIComponent(title)}`;
+    window.open(url, '_blank');
   };
 
   // Package 模式：全屏只展示运行预览，自动加载内置 ZIP
@@ -255,13 +327,33 @@ export const App: React.FC = () => {
                 </p>
                 <p className="mt-1">导入后会自动保存到本地历史列表，下次可以直接点击加载，无需重新选择文件。</p>
               </div>
+
+              <div className="flex items-center justify-between pt-1 mt-1 border-t border-[#ffb000]/20">
+                <div className="text-[10px] text-[#ffb000]/60 pr-2">
+                  一键在 <span className="underline">LCYLYM/purepackage</span> 仓库创建打包 Issue，正文模板会自动复制到剪贴板。
+                </div>
+                <button
+                  type="button"
+                  className="ml-2 px-2 py-0.5 text-[10px] border border-[#ffb000]/60 hover:bg-[#ffb000] hover:text-black disabled:opacity-40 disabled:hover:bg-transparent whitespace-nowrap"
+                  disabled={!selectedZipName}
+                  onClick={handleCreateBuildIssue}
+                >
+                  提交打包 Issue
+                </button>
+              </div>
             </div>
           </CassetteBox>
         </div>
 
         {/* 右侧：历史 + 预览 + 状态 */}
         <div className="col-span-8 flex flex-col gap-3 min-h-0">
-          <CassetteBox title="历史 ZIP 列表" className="flex-[2] min-h-0">
+          <CassetteBox
+            title="历史 ZIP 列表"
+            className="flex-[2] min-h-0"
+            collapsible
+            collapsed={!historyOpen}
+            onHeaderClick={() => setHistoryOpen((v) => !v)}
+          >
             <div className="text-[11px] space-y-1 max-h-32 overflow-auto">
               {history.length === 0 ? (
                 <div className="text-[#ffb000]/50">暂无历史记录，先在左侧导入一个 ZIP 文件。</div>
@@ -334,7 +426,13 @@ export const App: React.FC = () => {
             </div>
           </CassetteBox>
 
-          <CassetteBox title="引擎状态" className="flex-[2] min-h-0">
+          <CassetteBox
+            title="引擎状态"
+            className="flex-[2] min-h-0"
+            collapsible
+            collapsed={!statusOpen}
+            onHeaderClick={() => setStatusOpen((v) => !v)}
+          >
             <div className="text-[11px] space-y-1 font-mono">
               <div className="flex justify-between">
                 <span className="text-[#ffb000]/80">运行引擎</span>
