@@ -34,7 +34,8 @@ export const App: React.FC = () => {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
-    // 组件加载时读取历史 ZIP 列表
+    if (PACKAGE_MODE) return;
+    // 组件加载时读取历史 ZIP 列表（仅普通 Host 模式）
     listZipHistory().then(setHistory).catch(() => {});
   }, []);
 
@@ -120,6 +121,69 @@ export const App: React.FC = () => {
       el.msRequestFullscreen;
     if (requestFull) requestFull.call(el);
   };
+
+  // Package 模式：全屏只展示运行预览，自动加载内置 ZIP
+  useEffect(() => {
+    if (!PACKAGE_MODE) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await fetch(EMBED_ZIP_URL);
+        if (!res.ok) throw new Error(`无法加载内置 ZIP：${res.status} ${res.statusText}`);
+        const buf = await res.arrayBuffer();
+        const blob = new Blob([buf], { type: 'application/zip' });
+        await runZipBlob(blob, 'embedded-app.zip');
+      } catch (err: any) {
+        if (cancelled) return;
+        console.error(err);
+        setError(err?.message || String(err));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (PACKAGE_MODE) {
+    return (
+      <div className="h-screen w-screen bg-black text-[#ffb000] flex flex-col">
+        <div className="flex-1 min-h-0">
+          {htmlUrl ? (
+            <iframe
+              ref={iframeRef}
+              src={htmlUrl}
+              className="w-full h-full border-0 bg-black"
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center text-xs text-[#ffb000]/70 gap-2">
+              {loading ? (
+                <>
+                  <div className="text-3xl animate-pulse">⌛</div>
+                  <div>正在加载内置应用...</div>
+                </>
+              ) : error ? (
+                <>
+                  <div className="text-red-400 mb-1">加载失败</div>
+                  <pre className="text-[11px] max-w-[80vw] max-h-[50vh] overflow-auto whitespace-pre-wrap break-words text-red-300 border border-red-500/40 px-2 py-1 bg-black/60">{error}</pre>
+                </>
+              ) : (
+                <>
+                  <div className="text-3xl">…</div>
+                  <div>正在等待内置应用加载</div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen w-screen bg-[#111] text-[#ffb000] flex flex-col p-2 box-border font-['JetBrains_Mono',monospace] relative">
