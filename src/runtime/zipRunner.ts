@@ -6,8 +6,11 @@ let esbuildInitialized = false;
 
 async function ensureEsbuild() {
   if (esbuildInitialized) return;
+  // 使用相对路径，确保在 dev (http://localhost:5173) 和 Electron (file://dist/index.html)
+  // 两种环境下都能正确加载 public/esbuild.wasm
+  const wasmURL = 'esbuild.wasm';
   await esbuild.initialize({
-    wasmURL: '/esbuild.wasm',
+    wasmURL,
   });
   esbuildInitialized = true;
 }
