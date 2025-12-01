@@ -27,16 +27,7 @@ jobs:
         run: |
           npm run build:web
 
-      - name: Build electron exe (signed)
-        if: ${{ secrets.WIN_CERT_PFX != '' }}
-        env:
-          CSC_LINK: base64:${{ secrets.WIN_CERT_PFX }}
-          CSC_KEY_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
-        run: |
-          npm run build:electron
-
       - name: Build electron exe (unsigned)
-        if: ${{ secrets.WIN_CERT_PFX == '' }}
         env:
           WIN_CSC_LINK: ""
           CSC_LINK: ""
@@ -83,26 +74,9 @@ jobs:
           cd android
           ./gradlew assembleRelease
 
-      - name: Sign APK
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_ALIAS_PASSWORD: ${{ secrets.ANDROID_KEY_ALIAS_PASSWORD }}
-        run: |
-          cd android
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > release.keystore
-          apksigner sign \
-            --ks release.keystore \
-            --ks-pass pass:$ANDROID_KEYSTORE_PASSWORD \
-            --ks-key-alias $ANDROID_KEY_ALIAS \
-            --key-pass pass:$ANDROID_KEY_ALIAS_PASSWORD \
-            app/build/outputs/apk/release/app-release-unsigned.apk \
-            --out app-release-signed.apk
-
+      # 直接上传未签名 APK（Gradle 默认输出路径）
       - name: Upload apk
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: android/app-release-signed.apk
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
