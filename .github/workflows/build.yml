@@ -27,7 +27,16 @@ jobs:
         run: |
           npm run build:web
 
+      - name: Build electron exe (signed)
+        if: ${{ secrets.WIN_CERT_PFX != '' }}
+        env:
+          CSC_LINK: base64:${{ secrets.WIN_CERT_PFX }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
+        run: |
+          npm run build:electron
+
       - name: Build electron exe (unsigned)
+        if: ${{ secrets.WIN_CERT_PFX == '' }}
         env:
           WIN_CSC_LINK: ""
           CSC_LINK: ""
@@ -75,7 +84,7 @@ jobs:
           ./gradlew assembleRelease
 
       - name: Sign APK
-        if: secrets.ANDROID_KEYSTORE_BASE64 != ''
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
