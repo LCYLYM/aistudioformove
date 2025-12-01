@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AIStudio For Move - Host</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <style>
+      body {
+        background-color: #111;
+        color: #ffb000;
+        font-family: 'JetBrains Mono', monospace;
+        overflow: hidden;
+      }
+      /* Custom scrollbar */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: #1a1a1a; }
+      ::-webkit-scrollbar-thumb { background: #553300; border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: #ffb000; }
+
+      .amber-glow { text-shadow: 0 0 2px rgba(255, 176, 0, 0.5); }
+      .scanline {
+        background: linear-gradient(
+          to bottom,
+          rgba(255,255,255,0),
+          rgba(255,255,255,0) 50%,
+          rgba(0,0,0,0.1) 50%,
+          rgba(0,0,0,0.1)
+        );
+        background-size: 100% 4px;
+        pointer-events: none;
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        opacity: 0.1;
+      }
+    </style>
+  </head>
+  <body class="bg-[#111]">
+    <div id="root"></div>
+    <div class="scanline"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

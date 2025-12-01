@@ -1,0 +1,86 @@
+name: Build exe & apk
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install deps
+        run: |
+          npm install
+
+      - name: Build web
+        run: |
+          npm run build:web
+
+      - name: Build electron exe
+        env:
+          CSC_LINK: ${{ secrets.WIN_CERT_PFX }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
+        run: |
+          npm run build:electron
+
+      - name: Upload exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-exe
+          path: dist-electron/**/*.exe
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install deps
+        run: |
+          npm install
+
+      - name: Build web
+        run: |
+          npm run build:web
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Sync Capacitor
+        run: |
+          npx cap sync android
+
+      - name: Build APK
+        run: |
+          cd android
+          ./gradlew assembleRelease
+
+      - name: Sign APK
+        run: |
+          cd android
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+          $ANDROID_HOME/build-tools/*/apksigner sign \
+            --ks release.keystore \
+            --ks-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
+            --ks-key-alias ${{ secrets.ANDROID_KEY_ALIAS }} \
+            --key-pass pass:${{ secrets.ANDROID_KEY_ALIAS_PASSWORD }} \
+            app/build/outputs/apk/release/app-release-unsigned.apk \
+            --out app-release-signed.apk
+
+      - name: Upload apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android/app-release-signed.apk

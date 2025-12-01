@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cassette Orchestrator - UI Template</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        body {
+            background-color: #111;
+            color: #ffb000;
+            font-family: 'JetBrains Mono', monospace;
+            overflow: hidden; /* Prevent body scroll */
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1a1a1a; }
+        ::-webkit-scrollbar-thumb { background: #553300; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #ffb000; }
+        
+        .amber-glow { text-shadow: 0 0 2px rgba(255, 176, 0, 0.5); }
+        .scanline {
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.1) 50%,
+                rgba(0,0,0,0.1)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            opacity: 0.1;
+        }
+    </style>
+
+    <!-- Import Map for ES Modules -->
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.263.1",
+        "react-markdown": "https://esm.sh/react-markdown@8.0.7"
+      }
+    }
+    </script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- Main Application Logic -->
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+            Folder, FileCode, FileText, ChevronRight, ChevronDown, 
+            Package, Settings, FolderOpen, Play, Edit, Eye, Box, Server, X, Save 
+        } from 'lucide-react';
+        import ReactMarkdown from 'react-markdown';
+
+        // --- Types & Constants ---
+        const OrchestratorPhase = {
+            DESIGN: 'PHASE 1 (DESIGN)',
+            FRONTEND: 'PHASE 2 (FRONTEND)',
+            IMPLEMENTATION: 'PHASE 3 (IMPLEMENTATION)'
+        };
+
+        const ServiceStatus = {
+            IDLE: 'IDLE',
+            BUSY: 'BUSY',
+            ACTIVE: 'ACTIVE',
+            OFFLINE: 'OFFLINE'
+        };
+
+        // --- Mock Data ---
+        const INITIAL_FILES = [
+            {
+                id: 'root', name: 'CASSETTE-APP', type: 'folder', children: [
+                    { id: 'docs', name: '程序设计', type: 'folder', children: [
+                        { id: 'doc1', name: 'design_doc.md', type: 'file', content: '# System Architecture\n\n## Overview\nThe Cassette Orchestrator allows high-level directive input to control multiple AI agents.\n\n## Modules\n- Orchestrator (Main)\n- Designer (ClaudeCode)\n- Builder (Codex)' },
+                        { id: 'doc2', name: 'requirements.txt', type: 'file', content: '1. React Frontend\n2. Gemini Integration\n3. Retro UI' }
+                    ]},
+                    { id: 'ref', name: '参考前端', type: 'folder', children: [
+                        { id: 'ref1', name: 'layout_sketch.js', type: 'file', content: '// Rough layout sketch\nconst Grid = styled.div`...`' },
+                        { id: 'ref2', name: 'frontend_ref.js', type: 'file', content: 'export const Button = () => <button>Click</button>' }
+                    ]},
+                    { id: 'test', name: '测试代码', type: 'folder', children: [
+                        { id: 'test1', name: 'test_plan.txt', type: 'file', content: 'Test Plan:\n1. Unit tests for components\n2. Integration tests for AI' }
+                    ]},
+                    { id: 'readme', name: 'README.md', type: 'file', content: '# Welcome User.\n\nInitialize phase 1 to begin.' }
+                ]
+            }
+        ];
+
+        // --- Components ---
+
+        const CassetteBox = ({ title, className = "", children, headerRight }) => (
+            <div className={`flex flex-col border border-[#ffb000] bg-[#1a1a1a] shadow-[0_0_10px_rgba(255,176,0,0.1)] ${className}`}>
+                <div className="flex justify-between items-center bg-[#ffb000] text-black px-2 py-1 uppercase text-sm font-bold tracking-wider flex-shrink-0">
+                    <span>{title}</span>
+                    {headerRight && <span>{headerRight}</span>}
+                </div>
+                <div className="flex-1 p-2 overflow-hidden relative min-h-0 flex flex-col">
+                    {children}
+                    <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-[#ffb000] mb-1 mr-1 opacity-50 pointer-events-none"></div>
+                    <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-[#ffb000] mb-1 mr-1 opacity-50 pointer-events-none"></div>
+                </div>
+            </div>
+        );
+
+        const FileTreeNode = ({ node, onSelect, selectedId, depth }) => {
+            const [isOpen, setIsOpen] = useState(true);
+            const isSelected = node.id === selectedId;
+
+            const handleClick = (e) => {
+                e.stopPropagation();
+                if (node.type === 'folder') setIsOpen(!isOpen);
+                else onSelect(node);
+            };
+
+            const getIcon = () => {
+                if (node.type === 'folder') return <Folder size={14} className="text-[#ffb000]" />;
+                if (node.name.endsWith('.md') || node.name.endsWith('.txt')) return <FileText size={14} className="text-[#dcb15b]" />;
+                return <FileCode size={14} className="text-[#e6c07b]" />;
+            };
+
+            return (
+                <div>
+                    <div
+                        onClick={handleClick}
+                        className={`
+                            flex items-center cursor-pointer py-1 px-2 transition-all duration-100 border-l 
+                            ${isSelected ? 'bg-[#ffb000]/20 border-[#ffb000] text-[#ffb000] font-bold' : 'border-transparent text-[#ffb000]/80 hover:bg-[#ffb000]/10'}
+                        `}
+                        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+                    >
+                        <span className="mr-2 opacity-60 w-4 flex justify-center">
+                            {node.type === 'folder' ? (isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />) : null}
+                        </span>
+                        <span className="mr-2 opacity-90">{getIcon()}</span>
+                        <span className="text-xs tracking-wide truncate">{node.name}</span>
+                    </div>
+                    {isOpen && node.children && (
+                        <div className="relative">
+                            <div className="absolute left-[calc(8px+4px)] top-0 bottom-0 w-px bg-[#ffb000]/10" style={{ left: `${depth * 16 + 15}px` }}></div>
+                            {node.children.map((child) => (
+                                <FileTreeNode key={child.id} node={child} onSelect={onSelect} selectedId={selectedId} depth={depth + 1} />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const FileTree = ({ data, onSelect, selectedId }) => (
+            <div className="h-full flex flex-col">
+                <div className="text-[10px] uppercase tracking-widest bg-[#1a1a1a] p-2 border-b border-[#ffb000]/20 text-[#ffb000]/50 sticky top-0 z-10 flex items-center gap-2">
+                    <Package size={12} /> Project Root
+                </div>
+                <div className="overflow-y-auto flex-1 p-1">
+                    {data.map((node) => <FileTreeNode key={node.id} node={node} onSelect={onSelect} selectedId={selectedId} depth={0} />)}
+                </div>
+            </div>
+        );
+
+        const StatusItem = ({ name, status, role, progress = 0 }) => {
+            const activeBars = Math.floor((progress / 100) * 20);
+            return (
+                <div className="mb-6 font-mono">
+                    <div className="flex justify-between items-baseline mb-1">
+                        <span className={`font-bold text-sm tracking-wider ${status === 'ACTIVE' || status === 'BUSY' ? 'text-[#ffb000]' : 'text-gray-500'}`}>{name}</span>
+                        <span className="text-[10px] uppercase opacity-50">[{status}]</span>
+                    </div>
+                    <div className="text-[10px] text-[#ffb000] opacity-60 mb-1 flex justify-between">
+                        <span>({role})</span>
+                        {status === 'BUSY' && <span className="animate-pulse">PROCESSING...</span>}
+                    </div>
+                    <div className="h-2 bg-[#111] border border-[#333] flex gap-[1px] p-[1px]">
+                        {Array.from({ length: 20 }).map((_, i) => (
+                            <div key={i} className={`flex-1 ${i < activeBars ? 'bg-[#ffb000]' : 'bg-[#222]'}`} style={{ opacity: i < activeBars ? 1 : 0.2 }}></div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const Terminal = ({ logs }) => {
+            const bottomRef = useRef(null);
+            useEffect(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), [logs]);
+            return (
+                <div className="h-full overflow-y-auto font-mono text-[11px] p-2 bg-[#0d0d0d] leading-5">
+                    {logs.map((log) => (
+                        <div key={log.id} className="mb-1 break-words flex gap-2 hover:bg-[#ffb000]/5 px-1 rounded-sm">
+                            <span className="text-[#885500] opacity-60 flex-shrink-0">[{log.timestamp}]</span>
+                            <span className={log.level === 'error' ? 'text-red-500' : log.level === 'success' ? 'text-[#00ff41]' : 'text-[#ffb000]'}>
+                                <span className="opacity-50 mr-2">{">"}</span>{log.message}
+                            </span>
+                        </div>
+                    ))}
+                    <div className="flex items-center gap-2 text-[#ffb000] opacity-50 pl-1 mt-2">
+                        <span>$</span><span className="w-2 h-4 bg-[#ffb000] animate-pulse"></span>
+                    </div>
+                    <div ref={bottomRef} className="h-4" />
+                </div>
+            );
+        };
+
+        const DocumentEditor = ({ files, activeFileId, onTabClick, onCloseTab, openFiles }) => {
+            const [mode, setMode] = useState('edit');
+            const [content, setContent] = useState('');
+            
+            const findFile = (nodes, id) => {
+                for (const node of nodes) {
+                    if (node.id === id) return node;
+                    if (node.children) {
+                        const found = findFile(node.children, id);
+                        if (found) return found;
+                    }
+                }
+            };
+            
+            const activeFile = activeFileId ? findFile(files, activeFileId) : null;
+            useEffect(() => { if (activeFile) setContent(activeFile.content); }, [activeFileId]);
+
+            return (
+                <div className="h-full flex flex-col bg-[#151515]">
+                    <div className="flex overflow-x-auto border-b border-[#ffb000]/30 bg-[#111] flex-shrink-0">
+                        {openFiles.map(id => {
+                            const f = findFile(files, id);
+                            if(!f) return null;
+                            const isActive = id === activeFileId;
+                            return (
+                                <div key={id} onClick={() => onTabClick(id)} className={`flex items-center gap-2 px-3 py-1.5 text-xs font-mono cursor-pointer border-r border-[#ffb000]/20 min-w-[120px] ${isActive ? 'bg-[#ffb000] text-black font-bold' : 'text-[#ffb000] hover:bg-[#ffb000]/10'}`}>
+                                    <span className="truncate flex-1">{f.name}</span>
+                                    <span onClick={(e) => { e.stopPropagation(); onCloseTab(id); }} className="hover:text-red-500">×</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    {activeFile ? (
+                        <div className="flex-1 flex flex-col min-h-0">
+                             <div className="flex justify-between items-center px-2 py-1 bg-[#1a1a1a] border-b border-[#ffb000]/10 text-[10px] text-[#ffb000]/70 flex-shrink-0">
+                                <div className="flex gap-2">
+                                    <button onClick={() => setMode('edit')} className={`flex gap-1 ${mode==='edit'?'text-[#ffb000] font-bold':''}`}><Edit size={10}/> EDIT</button>
+                                    <button onClick={() => setMode('preview')} className={`flex gap-1 ${mode==='preview'?'text-[#ffb000] font-bold':''}`}><Eye size={10}/> PREVIEW</button>
+                                </div>
+                            </div>
+                            <div className="flex-1 overflow-auto relative">
+                                {mode === 'edit' ? (
+                                    <textarea className="w-full h-full bg-[#111] text-[#dcb15b] p-4 resize-none focus:outline-none font-mono text-sm" value={content} onChange={(e) => setContent(e.target.value)} spellCheck={false} />
+                                ) : (
+                                    <div className="prose prose-invert prose-p:text-[#dcb15b] p-4 text-sm max-w-none"><ReactMarkdown>{content}</ReactMarkdown></div>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex-1 flex items-center justify-center opacity-20 text-[#ffb000] flex-col"><div className="text-4xl">▞▞▞</div><div>NO SIGNAL</div></div>
+                    )}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [input, setInput] = useState('');
+            const [chatHistory, setChatHistory] = useState([]);
+            const [logs, setLogs] = useState([{id:1, timestamp:'00:00:01', message:'System Ready', level:'info'}]);
+            const [activeFileId, setActiveFileId] = useState('doc1');
+            const [openFiles, setOpenFiles] = useState(['doc1', 'ref2']);
+
+            const handleSend = () => {
+                if(!input.trim()) return;
+                const newMsg = { id: Date.now(), role: 'user', text: input, timestamp: new Date() };
+                setChatHistory(prev => [...prev, newMsg]);
+                setInput('');
+                setLogs(prev => [...prev, {id: Date.now(), timestamp: new Date().toTimeString().split(' ')[0], message: `Executing: ${input}`, level: 'info'}]);
+                
+                // Mock Response
+                setTimeout(() => {
+                    setChatHistory(prev => [...prev, { id: Date.now()+1, role: 'model', text: "Directive received. Analyzing constraints and dispatching to subsystem...", timestamp: new Date() }]);
+                }, 800);
+            };
+
+            return (
+                <div className="h-screen w-screen bg-[#111] text-[#ffb000] flex flex-col p-2 box-border font-sans relative">
+                    <div className="scanline"></div>
+                    
+                    {/* Header */}
+                    <header className="flex justify-between items-center mb-2 border-b border-[#ffb000] pb-2 px-1 flex-shrink-0">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-[#ffb000] text-black px-2 py-0.5 font-bold text-lg">SYS</div>
+                            <h1 className="text-xl font-bold tracking-widest amber-glow">CASSETTE ORCHESTRATOR</h1>
+                        </div>
+                        <div className="flex gap-4 text-xs font-mono">
+                            <div className="border border-[#ffb000]/50 px-3 py-1 flex items-center gap-2 cursor-pointer hover:bg-[#ffb000]/10">
+                                <FolderOpen size={14} /> /usr/local/projects
+                            </div>
+                            <div className="bg-[#ffb000] text-black px-3 py-1 font-bold">PHASE 1 (DESIGN)</div>
+                        </div>
+                    </header>
+
+                    {/* Main Grid */}
+                    <div className="flex-1 grid grid-cols-12 gap-3 min-h-0 mb-2">
+                        <div className="col-span-3 flex flex-col gap-3 min-h-0">
+                            <div className="flex-[3] min-h-0"><CassetteBox title="FILE TREE" className="h-full"><FileTree data={INITIAL_FILES} onSelect={(f)=>setActiveFileId(f.id)} selectedId={activeFileId} /></CassetteBox></div>
+                            <div className="flex-[2] min-h-0"><CassetteBox title="STATUS" className="h-full"><div className="p-4"><StatusItem name="CLAUDE" status="BUSY" role="Design" progress={45} /><StatusItem name="GEMINI" status="ACTIVE" role="Orch" progress={100} /></div></CassetteBox></div>
+                        </div>
+                        <div className="col-span-5 flex flex-col gap-3 min-h-0">
+                            <div className="flex-[3] min-h-0"><CassetteBox title="EDITOR" className="h-full"><DocumentEditor files={INITIAL_FILES} activeFileId={activeFileId} openFiles={openFiles} onTabClick={setActiveFileId} onCloseTab={(id)=>setOpenFiles(p=>p.filter(x=>x!==id))} /></CassetteBox></div>
+                            <div className="flex-[2] min-h-0"><CassetteBox title="COMMS" className="h-full"><div className="flex-1 p-2 overflow-y-auto space-y-2">{chatHistory.map(m=><div key={m.id} className={`p-2 text-sm ${m.role==='user'?'bg-[#ffb000] text-black self-end':'bg-[#222] border border-[#ffb000]/30'}`}>{m.text}</div>)}</div><div className="p-2 flex gap-2"><input className="flex-1 bg-black border border-[#ffb000] p-2 text-sm focus:outline-none" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleSend()} placeholder="Input command..." /><button onClick={handleSend} className="bg-[#ffb000] text-black px-4 font-bold">SEND</button></div></CassetteBox></div>
+                        </div>
+                        <div className="col-span-4 flex flex-col gap-3 min-h-0">
+                            <div className="flex-[3] min-h-0"><CassetteBox title="LOGS" className="h-full"><Terminal logs={logs} /></CassetteBox></div>
+                            <div className="flex-[3] min-h-0"><CassetteBox title="PREVIEW" className="h-full bg-[#050505] relative"><div className="absolute inset-0 flex items-center justify-center text-[#ffb000] opacity-50 font-bold animate-pulse">WAITING FOR RENDER...</div></CassetteBox></div>
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <footer className="text-[10px] flex justify-between uppercase border-t border-[#ffb000]/50 pt-1 opacity-80 font-mono flex-shrink-0">
+                        <div className="flex gap-6"><span>MEM: 64K OK</span><span>LINK: ACTIVE</span><span>WORKERS: 1 BUSY</span></div>
+                        <div>SESSION: 0x4A1B2C</div>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

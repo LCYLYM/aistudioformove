@@ -1,0 +1,16 @@
+node_modules/
+dist/
+dist-ssr/
+dist-electron/
+android/
+.vite/
+.idea/
+.vscode/
+.DS_Store
+npm-debug.log*
+yarn-error.log*
+*.log
+
+
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md

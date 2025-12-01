@@ -1,0 +1,12 @@
+appId: com.lcylm.aistudioformove
+productName: AIStudioForMove
+directories:
+  output: dist-electron
+  buildResources: build
+files:
+  - dist/**
+  - electron/main.js
+  - electron/preload.js
+win:
+  target:
+    - portable
