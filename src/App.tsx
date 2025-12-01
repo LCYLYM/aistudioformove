@@ -74,6 +74,8 @@ export const App: React.FC = () => {
   const [history, setHistory] = useState<ZipMeta[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [packageConfigReady, setPackageConfigReady] = useState(!PACKAGE_MODE || !!getStoredGeminiConfig().key);
+  const [showPackageConfigModal, setShowPackageConfigModal] = useState(PACKAGE_MODE && !getStoredGeminiConfig().key);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
@@ -86,6 +88,16 @@ export const App: React.FC = () => {
     const next = { ...config, [field]: value };
     setConfig(next);
     setStoredGeminiConfig(next);
+  };
+
+  const handleConfirmPackageConfig = () => {
+    if (!config.key.trim()) {
+      alert('请先填写 API Key');
+      return;
+    }
+    setStoredGeminiConfig(config);
+    setPackageConfigReady(true);
+    setShowPackageConfigModal(false);
   };
 
   const runZipBlob = async (blob: Blob, nameHint?: string) => {
@@ -194,9 +206,9 @@ export const App: React.FC = () => {
     window.open(url, '_blank');
   };
 
-  // Package 模式：全屏只展示运行预览，自动加载内置 ZIP
+  // Package 模式：全屏只展示运行预览，自动加载内置 ZIP（但要等 API Key 配置完成）
   useEffect(() => {
-    if (!PACKAGE_MODE) return;
+    if (!PACKAGE_MODE || !packageConfigReady) return;
 
     let cancelled = false;
     (async () => {
@@ -220,11 +232,11 @@ export const App: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [packageConfigReady]);
 
   if (PACKAGE_MODE) {
     return (
-      <div className="h-screen w-screen bg-black text-[#ffb000] flex flex-col">
+      <div className="h-screen w-screen bg-black text-[#ffb000] flex flex-col relative">
         <div className="flex-1 min-h-0">
           {htmlUrl ? (
             <iframe
@@ -253,6 +265,45 @@ export const App: React.FC = () => {
             </div>
           )}
         </div>
+
+        {showPackageConfigModal && (
+          <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
+            <div className="w-full max-w-sm bg-[#111] border border-[#ffb000] px-4 py-3 text-xs shadow-xl">
+              <div className="font-bold text-sm mb-2">首次启动：填写 Gemini 配置</div>
+              <p className="text-[11px] text-[#ffb000]/70 mb-3">
+                该应用由 Host 封装而成，需要在本机保存一次 Gemini 接口地址与 API Key，之后会以环境变量形式注入运行时。
+              </p>
+              <div className="space-y-2 mb-3">
+                <div>
+                  <div className="mb-1 uppercase tracking-widest text-[10px] text-[#ffb000]/60">BASEURL（接口地址）</div>
+                  <input
+                    className="w-full bg-black border border-[#ffb000]/60 px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-[#ffb000]"
+                    value={config.baseurl}
+                    onChange={e => handleConfigChange('baseurl', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <div className="mb-1 uppercase tracking-widest text-[10px] text-[#ffb000]/60">API KEY（密钥）</div>
+                  <input
+                    className="w-full bg-black border border-[#ffb000]/60 px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-[#ffb000]"
+                    type="password"
+                    value={config.key}
+                    onChange={e => handleConfigChange('key', e.target.value)}
+                    placeholder="在此粘贴 Gemini API Key"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 text-[11px]">
+                <button
+                  className="px-3 py-1 border border-[#ffb000]/60 hover:bg-[#ffb000] hover:text-black"
+                  onClick={handleConfirmPackageConfig}
+                >
+                  保存并启动
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
