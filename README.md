@@ -12,3 +12,4 @@
 - Android apk（Capacitor）
 
 > 注意：你需要在 GitHub 仓库的 Secrets 中配置 Gemini 与签名相关的密钥，CI 配置文件会使用这些值完成构建和签名。
+  基本功能实现
